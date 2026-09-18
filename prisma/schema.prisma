@@ -1,0 +1,409 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  ADMIN
+  DELIVERY_PARTNER
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PREPARING
+  PACKED
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum AddressType {
+  HOME
+  WORK
+  OTHER
+}
+
+enum PreparationType {
+  WHOLE
+  PEELED
+  DICED
+  CUBED
+  SLICED
+  FRENCH_FRY_CUT
+  CHOPPED
+  HALVED
+  QUARTERED
+  GRATED
+  READY_TO_EAT
+  FRUIT_BOWL
+}
+
+enum ProductCategory {
+  VEGETABLES
+  FRUITS
+  RECIPE_KITS
+  COMBO_PACKS
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED
+}
+
+enum SupportStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum DeliveryStatus {
+  PENDING
+  ASSIGNED
+  PICKED_UP
+  OUT_FOR_DELIVERY
+  DELIVERED
+  FAILED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String?  @unique
+  phone        String?  @unique
+  passwordHash String?
+  role         Role     @default(CUSTOMER)
+  isVerified   Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  addresses     Address[]
+  orders        Order[]
+  cart          Cart?
+  wishlist      Wishlist[]
+  reviews       Review[]
+  supportTickets SupportTicket[]
+  notifications  Notification[]
+  subscriptions  Subscription[]
+}
+
+model Address {
+  id          String      @id @default(cuid())
+  userId      String
+  name        String
+  phone       String
+  addressLine String
+  landmark    String?
+  area        String
+  city        String
+  state       String
+  pincode     String
+  latitude    Float?
+  longitude   Float?
+  type        AddressType @default(HOME)
+  isDefault   Boolean     @default(false)
+  createdAt   DateTime    @default(now())
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders Order[]
+}
+
+model Product {
+  id          String          @id @default(cuid())
+  name        String
+  slug        String          @unique
+  category    ProductCategory
+  subcategory String?
+  description String?
+  image       String?
+  basePrice   Float
+  isSeasonal  Boolean         @default(false)
+  isAvailable Boolean         @default(true)
+  shelfLife   String?
+  tags        String[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  variants          ProductVariant[]
+  cartItems         CartItem[]
+  orderItems        OrderItem[]
+  wishlist          Wishlist[]
+  reviews           Review[]
+  inventory         Inventory?
+  recipeIngredients RecipeIngredient[]
+}
+
+model ProductVariant {
+  id              String          @id @default(cuid())
+  productId       String
+  weight          Int             // in grams
+  preparationType PreparationType
+  price           Float
+  stock           Int             @default(0)
+  isAvailable     Boolean         @default(true)
+  preparationTime Int?            // in minutes
+
+  product    Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+}
+
+model Cart {
+  id        String     @id @default(cuid())
+  userId    String     @unique
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items CartItem[]
+}
+
+model CartItem {
+  id               String @id @default(cuid())
+  cartId           String
+  productId        String
+  productVariantId String
+  quantity         Int    @default(1)
+
+  cart           Cart           @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product        Product        @relation(fields: [productId], references: [id])
+  productVariant ProductVariant @relation(fields: [productVariantId], references: [id])
+}
+
+model Order {
+  id               String        @id @default(cuid())
+  userId           String
+  addressId        String
+  subtotal         Float
+  deliveryFee      Float         @default(0)
+  discount         Float         @default(0)
+  tax              Float         @default(0)
+  total            Float
+  paymentStatus    PaymentStatus @default(PENDING)
+  paymentMethod    String?
+  paymentId        String?
+  orderStatus      OrderStatus   @default(PENDING)
+  deliverySlot     String?
+  specialInstructions String?
+  couponCode       String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  user     User        @relation(fields: [userId], references: [id])
+  address  Address     @relation(fields: [addressId], references: [id])
+  items    OrderItem[]
+  delivery Delivery?
+  reviews  Review[]
+  refunds  Refund[]
+  supportTickets SupportTicket[]
+}
+
+model OrderItem {
+  id               String @id @default(cuid())
+  orderId          String
+  productId        String
+  productVariantId String
+  quantity         Int
+  price            Float
+  name             String
+  preparationType  String
+  weight           Int
+
+  order          Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product        Product        @relation(fields: [productId], references: [id])
+  productVariant ProductVariant @relation(fields: [productVariantId], references: [id])
+}
+
+model Recipe {
+  id           String   @id @default(cuid())
+  name         String
+  slug         String   @unique
+  description  String?
+  image        String?
+  instructions String?
+  baseServings Int      @default(2)
+  category     String?
+  prepTime     Int?     // in minutes
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  ingredients RecipeIngredient[]
+}
+
+model RecipeIngredient {
+  id                String          @id @default(cuid())
+  recipeId          String
+  productId         String
+  quantityPerPerson Float           // in grams
+  preparationType   PreparationType @default(WHOLE)
+  isOptional        Boolean         @default(false)
+
+  recipe  Recipe  @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+}
+
+model Inventory {
+  id            String   @id @default(cuid())
+  productId     String   @unique
+  rawStock      Float    @default(0) // in kg
+  preparedStock Float    @default(0) // in kg
+  reservedStock Float    @default(0) // in kg
+  lowStockAlert Float    @default(2) // kg threshold
+  updatedAt     DateTime @updatedAt
+
+  product       Product        @relation(fields: [productId], references: [id])
+  wastageRecords WastageRecord[]
+}
+
+model WastageRecord {
+  id          String    @id @default(cuid())
+  inventoryId String
+  quantity    Float     // in kg
+  reason      String
+  notes       String?
+  recordedAt  DateTime  @default(now())
+
+  inventory Inventory @relation(fields: [inventoryId], references: [id])
+}
+
+model Coupon {
+  id            String       @id @default(cuid())
+  code          String       @unique
+  description   String?
+  discountType  DiscountType
+  discountValue Float
+  minimumOrder  Float        @default(0)
+  maximumDiscount Float?
+  usageLimit    Int?
+  usedCount     Int          @default(0)
+  isActive      Boolean      @default(true)
+  expiryDate    DateTime?
+  applicableCategories String[]
+  createdAt     DateTime     @default(now())
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  orderId   String?
+  rating    Int      // 1-5
+  comment   String?
+  isVerified Boolean @default(false)
+  isApproved Boolean @default(false)
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+  order   Order?  @relation(fields: [orderId], references: [id])
+}
+
+model Delivery {
+  id                String         @id @default(cuid())
+  orderId           String         @unique
+  deliveryPartnerId String?
+  status            DeliveryStatus @default(PENDING)
+  assignedAt        DateTime?
+  pickedUpAt        DateTime?
+  deliveredAt       DateTime?
+  estimatedTime     Int?           // in minutes
+  notes             String?
+
+  order Order @relation(fields: [orderId], references: [id])
+}
+
+model DeliveryZone {
+  id              String   @id @default(cuid())
+  name            String
+  minDistance     Float    // km
+  maxDistance     Float    // km
+  deliveryCharge  Float
+  estimatedTime   Int      // minutes
+  isActive        Boolean  @default(true)
+  pincodes        String[]
+  createdAt       DateTime @default(now())
+}
+
+model SupportTicket {
+  id        String        @id @default(cuid())
+  userId    String
+  orderId   String?
+  issue     String
+  description String?
+  status    SupportStatus @default(OPEN)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  user  User   @relation(fields: [userId], references: [id])
+  order Order? @relation(fields: [orderId], references: [id])
+}
+
+model Refund {
+  id        String   @id @default(cuid())
+  orderId   String
+  amount    Float
+  reason    String
+  status    String   @default("PENDING") // PENDING, APPROVED, REJECTED, PROCESSED
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id])
+}
+
+model Wishlist {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([userId, productId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  type      String   @default("general")
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Subscription {
+  id          String   @id @default(cuid())
+  userId      String
+  planName    String
+  description String?
+  price       Float
+  frequency   String   // weekly, monthly
+  deliveryDays String[]
+  isActive    Boolean  @default(true)
+  startDate   DateTime @default(now())
+  nextDelivery DateTime?
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
