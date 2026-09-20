@@ -56,7 +56,10 @@ export default function AdminDashboard() {
     const { user, logout } = useAuthStore();
     const router = useRouter();
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
+        try {
+            await fetch('/api/auth/logout', { method: 'POST' });
+        } catch (e) { }
         logout();
         router.push('/');
     };

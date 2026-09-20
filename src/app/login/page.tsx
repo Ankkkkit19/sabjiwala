@@ -27,35 +27,27 @@ export default function LoginPage() {
         e.preventDefault();
         setIsLoading(true);
 
-        // Simulate auth delay
-        await new Promise(r => setTimeout(r, 800));
+        try {
+            const endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/register';
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(form)
+            });
 
-        // Demo login — in production, this calls the API
-        login({
-            id: 'demo-user-1',
-            name: mode === 'register' ? form.name : 'Demo User',
-            email: form.email || undefined,
-            phone: form.phone || undefined,
-            role: 'CUSTOMER',
-        });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Authentication failed');
 
-        toast.success(mode === 'register' ? 'Welcome to Sabjiwala! 🌿' : 'Welcome back!', {
-            icon: '✅',
-        });
-
-        setIsLoading(false);
-        router.push('/');
-    };
-
-    const handleAdminLogin = () => {
-        login({
-            id: 'admin-1',
-            name: 'Admin',
-            email: 'admin@sabjiwala.in',
-            role: 'ADMIN',
-        });
-        toast.success('Logged in as Admin');
-        router.push('/admin');
+            login(data.user);
+            toast.success(mode === 'register' ? 'Welcome to Sabjiwala! 🌿' : 'Welcome back!', {
+                icon: '✅',
+            });
+            router.push('/');
+        } catch (error: any) {
+            toast.error(error.message);
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -226,15 +218,7 @@ export default function LoginPage() {
                         Continue with Google
                     </button>
 
-                    {/* Admin demo */}
-                    <div className="mt-4 text-center">
-                        <button
-                            onClick={handleAdminLogin}
-                            className="text-xs text-gray-400 hover:text-gray-600 underline"
-                        >
-                            Demo: Login as Admin
-                        </button>
-                    </div>
+
                 </div>
 
                 <p className="text-center text-xs text-gray-400 mt-4">
