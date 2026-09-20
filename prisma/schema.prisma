@@ -102,6 +102,7 @@ model User {
   supportTickets SupportTicket[]
   notifications  Notification[]
   subscriptions  Subscription[]
+  whatsAppSessions WhatsAppSession[]
 }
 
 model Address {
@@ -407,3 +408,35 @@ model Subscription {
 
   user User @relation(fields: [userId], references: [id])
 }
+
+// ─── WhatsApp Commerce ────────────────────────────────────────────────────────
+
+model WhatsAppSession {
+  id          String   @id @default(cuid())
+  phoneNumber String   @unique
+  userId      String?
+  state       String   @default("MENU")
+  sessionData Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+model WhatsAppCart {
+  id          String   @id @default(cuid())
+  phoneNumber String   @unique
+  items       Json     @default("[]")
+  couponCode  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model WhatsAppAuditLog {
+  id         String   @id @default(cuid())
+  adminPhone String
+  action     String
+  metadata   Json
+  createdAt  DateTime @default(now())
+}
+

@@ -21,10 +21,11 @@ export default function ProductCard({ product }: ProductCardProps) {
         v => v.preparationType === defaultPrep && v.weight === defaultWeight
     );
 
+    // CartItem has: id, productId, preparationType, weight — no nested variant object
     const cartItem = items.find(
         i => i.productId === product.id &&
-            i.variant.preparationType === defaultPrep &&
-            i.variant.weight === defaultWeight
+            i.preparationType === defaultPrep &&
+            i.weight === defaultWeight
     );
 
     const quantity = cartItem ? cartItem.quantity : 0;
@@ -54,8 +55,10 @@ export default function ProductCard({ product }: ProductCardProps) {
         }
     };
 
-    // Fake discount for UI purpose
-    const originalPrice = currentVariant ? currentVariant.price * 1.2 : product.basePrice * 1.2;
+    // Show MRP with 20% markup for strikethrough
+    const originalPrice = currentVariant
+        ? Math.round(currentVariant.price * 1.2)
+        : Math.round(product.basePrice * 1.2);
 
     return (
         <Link href={`/${product.category === 'VEGETABLES' ? 'vegetables' : 'fruits'}/${product.slug}`}>
@@ -76,7 +79,7 @@ export default function ProductCard({ product }: ProductCardProps) {
                     )}
 
                     {/* Badges */}
-                    <div className="absolute top-2 left-2 flex flex-col gap-1">
+                    <div className="absolute top-2 left-2">
                         {product.tags?.includes('popular') ? (
                             <span className="bg-yellow-400 text-yellow-900 text-[10px] font-bold px-2 py-0.5 rounded-sm shadow-sm">
                                 POPULAR

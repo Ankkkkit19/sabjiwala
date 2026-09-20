@@ -777,3 +777,5 @@ export const RECIPE_IMAGES: Record<string, string> = {
     'r7': 'https://images.unsplash.com/photo-1563379091339-03b2184f4f0c?w=500&q=80',
     'r8': 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=500&q=80'
 };
+
+
