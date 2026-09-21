@@ -48,9 +48,40 @@ export default function CheckoutPage() {
         pincode: '',
     });
 
-    const subtotal = getSubtotal();
-    const effectiveDelivery = subtotal >= 299 ? 0 : deliveryFee;
-    const total = subtotal - couponDiscount + effectiveDelivery;
+    const [serverSummary, setServerSummary] = useState<any>(null);
+    const [isLoadingSummary, setIsLoadingSummary] = useState(true);
+
+    React.useEffect(() => {
+        if (items.length === 0) return;
+        const fetchPreview = async () => {
+            setIsLoadingSummary(true);
+            try {
+                const res = await fetch('/api/checkout/preview', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        items: items.map(i => ({ variantId: i.variantId, quantity: i.quantity })),
+                        couponCode: couponCode || null,
+                        pincode: address.pincode || null
+                    })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    setServerSummary(data);
+                }
+            } catch (e) {
+                console.error(e);
+            } finally {
+                setIsLoadingSummary(false);
+            }
+        };
+        fetchPreview();
+    }, [items, couponCode, address.pincode]);
+
+    const subtotal = serverSummary ? serverSummary.subtotal : getSubtotal();
+    const effectiveDelivery = serverSummary ? serverSummary.deliveryFee : (subtotal >= 299 ? 0 : deliveryFee);
+    const total = serverSummary ? serverSummary.total : (subtotal - couponDiscount + effectiveDelivery);
+    const actualCouponDiscount = serverSummary ? serverSummary.couponDiscount : couponDiscount;
 
     const handlePlaceOrder = async () => {
         if (!address.flat || !address.street || !address.pincode) {
@@ -59,9 +90,42 @@ export default function CheckoutPage() {
             return;
         }
         setIsPlacingOrder(true);
-        await new Promise(r => setTimeout(r, 1200));
-        clearCart();
-        router.push('/order-confirmed');
+        try {
+            const res = await fetch('/api/checkout/place', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    items: items.map(i => ({ variantId: i.variantId, quantity: i.quantity })),
+                    couponCode: couponCode || null,
+                    address,
+                    paymentMethod: selectedPayment,
+                    deliverySlot: selectedSlot,
+                    specialInstructions
+                })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to place order');
+
+            clearCart();
+            router.push('/order-confirmed');
+        } catch (error: any) {
+            toast.error(error.message);
+            // Re-fetch preview just in case it was a price change or out of stock
+            const previewRes = await fetch('/api/checkout/preview', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    items: items.map(i => ({ variantId: i.variantId, quantity: i.quantity })),
+                    couponCode: couponCode || null,
+                    pincode: address.pincode || null
+                })
+            });
+            if (previewRes.ok) {
+                setServerSummary(await previewRes.json());
+            }
+        } finally {
+            setIsPlacingOrder(false);
+        }
     };
 
     if (items.length === 0) {
@@ -253,7 +317,7 @@ export default function CheckoutPage() {
                             <div className="border-t border-gray-100 pt-3 space-y-2 text-sm">
                                 <div className="flex justify-between"><span className="text-gray-600">Subtotal</span><span>{formatPrice(subtotal)}</span></div>
                                 <div className="flex justify-between"><span className="text-gray-600">Delivery</span><span className={effectiveDelivery === 0 ? 'text-green-600' : ''}>{effectiveDelivery === 0 ? 'FREE' : formatPrice(effectiveDelivery)}</span></div>
-                                {couponDiscount > 0 && <div className="flex justify-between text-green-600"><span>Coupon ({couponCode})</span><span>-{formatPrice(couponDiscount)}</span></div>}
+                                {actualCouponDiscount > 0 && <div className="flex justify-between text-green-600"><span>Coupon ({couponCode})</span><span>-{formatPrice(actualCouponDiscount)}</span></div>}
                                 <div className="border-t border-gray-100 pt-2 flex justify-between font-bold text-base">
                                     <span>Total</span><span>{formatPrice(total)}</span>
                                 </div>
