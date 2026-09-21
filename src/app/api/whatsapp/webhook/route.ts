@@ -5,6 +5,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
+import getPrisma from '@/lib/prismaClient';
 import { parseIntent } from '@/lib/whatsapp/intentParser';
 import { getSession, updateSession, clearSession } from '@/lib/whatsapp/sessionManager';
 import { isAdminPhone, isRateLimited, getPendingAction, clearPendingAction } from '@/lib/whatsapp/security';
@@ -28,49 +30,113 @@ export async function GET(req: NextRequest) {
 // ─── POST: Incoming Messages ──────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
-    let body: any;
     try {
-        body = await req.json();
-    } catch {
-        return NextResponse.json({ status: 'ok' }); // Always return 200 to WhatsApp
-    }
+        const rawBody = await req.text();
+        const signature = req.headers.get('x-hub-signature-256');
 
-    // Acknowledge immediately
-    setImmediate(() => processWebhook(body).catch(console.error));
-    return NextResponse.json({ status: 'ok' });
+        if (!signature || !process.env.WHATSAPP_APP_SECRET) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const expectedSignature = `sha256=${crypto
+            .createHmac('sha256', process.env.WHATSAPP_APP_SECRET)
+            .update(rawBody)
+            .digest('hex')}`;
+
+        const sigBuffer = Buffer.from(signature);
+        const expectedBuffer = Buffer.from(expectedSignature);
+
+        if (sigBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(sigBuffer, expectedBuffer)) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        let body: any;
+        try {
+            body = JSON.parse(rawBody);
+        } catch {
+            return NextResponse.json({ status: 'ok' }); // Malformed payload
+        }
+
+        // Must run inline because standard serverless functions pause on response
+        await processWebhook(body);
+        return NextResponse.json({ status: 'ok' });
+    } catch (err: any) {
+        // Return 500 only on unexpected systemic failures to trigger WhatsApp retry safely.
+        // Wait, for safety, returning 200 absorbs the message so no duplicate if we didn't carefully implement retries
+        console.error('Webhook error:', err);
+        return NextResponse.json({ status: 'ok' });
+    }
 }
 
 // ─── Main Processing ──────────────────────────────────────────────────────────
 
 async function processWebhook(body: any) {
-    if (body.object !== 'whatsapp_business_account') return;
+    if (body?.object !== 'whatsapp_business_account' || !Array.isArray(body.entry)) return;
 
-    for (const entry of body.entry ?? []) {
-        for (const change of entry.changes ?? []) {
+    const prisma = await getPrisma();
+    if (!prisma) return; // Prevent crashes if DB offline
+
+    for (const entry of body.entry) {
+        if (!Array.isArray(entry.changes)) continue;
+
+        for (const change of entry.changes) {
             const value = change.value;
-            if (!value?.messages?.length) continue;
+            if (!Array.isArray(value?.messages)) continue;
 
             for (const message of value.messages) {
-                const phone = message.from as string;
+                if (!message?.id) continue;
 
-                // Rate limiting
-                if (isRateLimited(phone)) {
-                    await sendTextMessage(phone, '⚠️ Too many messages. Please wait a moment and try again.');
-                    continue;
+                const messageId = message.id as string;
+                const phone = (message.from as string) || 'UNKNOWN';
+
+                try {
+                    // Idempotency pattern using create unique constraint
+                    await prisma.whatsAppMessage.create({
+                        data: {
+                            messageId,
+                            phoneNumber: phone,
+                            messageType: message.type,
+                            status: 'PROCESSING'
+                        }
+                    });
+                } catch (e: any) {
+                    // P2002 means already exists/processing - safely ignore duplicates
+                    if (e.code === 'P2002') continue;
+                    throw e;
                 }
 
-                // Extract text (handle text, interactive button reply, and list reply)
-                let text = '';
-                if (message.type === 'text') {
-                    text = message.text?.body?.trim() ?? '';
-                } else if (message.type === 'interactive') {
-                    text = message.interactive?.button_reply?.id ??
-                        message.interactive?.list_reply?.id ?? '';
+                try {
+                    // Process logic
+                    if (isRateLimited(phone)) {
+                        await sendTextMessage(phone, '⚠️ Too many requests. Please wait a moment.');
+                    } else {
+                        // Extract text safely ignoring unsupported contents like image/audio.
+                        let text = '';
+                        if (message.type === 'text') {
+                            text = message.text?.body?.trim() ?? '';
+                        } else if (message.type === 'interactive') {
+                            text = message.interactive?.button_reply?.id ??
+                                message.interactive?.list_reply?.id ?? '';
+                        }
+
+                        if (text) {
+                            await handleMessage(phone, text);
+                        }
+                    }
+
+                    // Mark as PROCESSED
+                    await prisma.whatsAppMessage.update({
+                        where: { messageId },
+                        data: { status: 'PROCESSED', processedAt: new Date() }
+                    });
+                } catch (err) {
+                    // Mark as FAILED
+                    await prisma.whatsAppMessage.update({
+                        where: { messageId },
+                        data: { status: 'FAILED' }
+                    });
+                    console.error('Message processing failed:', err);
                 }
-
-                if (!text) continue;
-
-                await handleMessage(phone, text);
             }
         }
     }

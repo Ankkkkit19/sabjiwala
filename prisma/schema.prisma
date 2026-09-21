@@ -440,3 +440,17 @@ model WhatsAppAuditLog {
   createdAt  DateTime @default(now())
 }
 
+model WhatsAppMessage {
+  id            String    @id @default(cuid())
+  messageId     String    @unique
+  phoneNumber   String?
+  messageType   String?
+  status        String
+  processedAt   DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([phoneNumber])
+  @@index([createdAt])
+}
+
+
