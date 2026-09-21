@@ -1,37 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
-import getPrisma from '@/lib/prismaClient';
-import bcrypt from 'bcrypt';
 import { createSession } from '@/lib/auth';
 
 export async function POST(req: NextRequest) {
     try {
-        const { email, phone, password } = await req.json();
+        const { email, phone, name } = await req.json();
 
-        if (!password || (!email && !phone)) {
-            return NextResponse.json({ error: 'Missing credentials' }, { status: 400 });
-        }
+        // 🚨 Database check has been fully removed for now as requested.
+        // This creates a fake mock user so the frontend works immediately.
 
-        const prisma = await getPrisma();
-        if (!prisma) {
-            return NextResponse.json({ error: 'Database not available' }, { status: 500 });
-        }
+        const mockUser = {
+            id: 'mock-user-123',
+            name: name || 'Demo User',
+            email: email || 'demo@example.com',
+            phone: phone || '0000000000',
+            role: 'CUSTOMER'
+        };
 
-        const user = await prisma.user.findFirst({
-            where: email ? { email } : { phone },
-        });
+        // Create the HTTP-only cookie session
+        await createSession(mockUser.id, mockUser.role);
 
-        if (!user || !user.passwordHash) {
-            return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
-        }
-
-        const isMatch = await bcrypt.compare(password, user.passwordHash);
-        if (!isMatch) {
-            return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
-        }
-
-        await createSession(user.id, user.role);
         return NextResponse.json({
-            user: { id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role }
+            user: mockUser
         });
     } catch (error) {
         console.error('Login error', error);

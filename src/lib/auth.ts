@@ -63,18 +63,15 @@ export async function getCurrentUser() {
     const session = await verifySession();
     if (!session) return null;
 
-    try {
-        const prisma = await getPrisma();
-        if (!prisma) return null;
-
-        const user = await prisma.user.findUnique({
-            where: { id: session.userId },
-            select: { id: true, name: true, email: true, phone: true, role: true },
-        });
-        return user;
-    } catch (error) {
-        return null;
-    }
+    // 🚨 Database check has been fully removed for now as requested.
+    // Return a mock user matching the session instead of querying DB.
+    return {
+        id: session.userId,
+        name: 'Demo User',
+        email: 'demo@example.com',
+        phone: '0000000000',
+        role: session.role || 'CUSTOMER'
+    };
 }
 
 export async function requireAuth() {
