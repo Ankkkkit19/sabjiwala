@@ -6,7 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mongodb"
   url      = env("DATABASE_URL")
 }
 
@@ -84,7 +84,7 @@ enum DeliveryStatus {
 }
 
 model User {
-  id           String   @id @default(cuid())
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
   name         String
   email        String?  @unique
   phone        String?  @unique
@@ -94,11 +94,11 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  addresses     Address[]
-  orders        Order[]
-  cart          Cart?
-  wishlist      Wishlist[]
-  reviews       Review[]
+  addresses      Address[]
+  orders         Order[]
+  cart           Cart?
+  wishlist       Wishlist[]
+  reviews        Review[]
   supportTickets SupportTicket[]
   notifications  Notification[]
   subscriptions  Subscription[]
@@ -106,8 +106,8 @@ model User {
 }
 
 model Address {
-  id          String      @id @default(cuid())
-  userId      String
+  id          String      @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String      @db.ObjectId
   name        String
   phone       String
   addressLine String
@@ -127,7 +127,7 @@ model Address {
 }
 
 model Product {
-  id          String          @id @default(cuid())
+  id          String          @id @default(auto()) @map("_id") @db.ObjectId
   name        String
   slug        String          @unique
   category    ProductCategory
@@ -152,8 +152,8 @@ model Product {
 }
 
 model ProductVariant {
-  id              String          @id @default(cuid())
-  productId       String
+  id              String          @id @default(auto()) @map("_id") @db.ObjectId
+  productId       String          @db.ObjectId
   weight          Int             // in grams
   preparationType PreparationType
   price           Float
@@ -167,8 +167,8 @@ model ProductVariant {
 }
 
 model Cart {
-  id        String     @id @default(cuid())
-  userId    String     @unique
+  id        String     @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String     @unique @db.ObjectId
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
@@ -177,10 +177,10 @@ model Cart {
 }
 
 model CartItem {
-  id               String @id @default(cuid())
-  cartId           String
-  productId        String
-  productVariantId String
+  id               String @id @default(auto()) @map("_id") @db.ObjectId
+  cartId           String @db.ObjectId
+  productId        String @db.ObjectId
+  productVariantId String @db.ObjectId
   quantity         Int    @default(1)
 
   cart           Cart           @relation(fields: [cartId], references: [id], onDelete: Cascade)
@@ -189,9 +189,9 @@ model CartItem {
 }
 
 model Order {
-  id               String        @id @default(cuid())
-  userId           String
-  addressId        String
+  id               String        @id @default(auto()) @map("_id") @db.ObjectId
+  userId           String        @db.ObjectId
+  addressId        String        @db.ObjectId
   subtotal         Float
   deliveryFee      Float         @default(0)
   discount         Float         @default(0)
@@ -217,10 +217,10 @@ model Order {
 }
 
 model OrderItem {
-  id               String @id @default(cuid())
-  orderId          String
-  productId        String
-  productVariantId String
+  id               String @id @default(auto()) @map("_id") @db.ObjectId
+  orderId          String @db.ObjectId
+  productId        String @db.ObjectId
+  productVariantId String @db.ObjectId
   quantity         Int
   price            Float
   name             String
@@ -233,7 +233,7 @@ model OrderItem {
 }
 
 model Recipe {
-  id           String   @id @default(cuid())
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
   name         String
   slug         String   @unique
   description  String?
@@ -249,9 +249,9 @@ model Recipe {
 }
 
 model RecipeIngredient {
-  id                String          @id @default(cuid())
-  recipeId          String
-  productId         String
+  id                String          @id @default(auto()) @map("_id") @db.ObjectId
+  recipeId          String          @db.ObjectId
+  productId         String          @db.ObjectId
   quantityPerPerson Float           // in grams
   preparationType   PreparationType @default(WHOLE)
   isOptional        Boolean         @default(false)
@@ -261,8 +261,8 @@ model RecipeIngredient {
 }
 
 model Inventory {
-  id            String   @id @default(cuid())
-  productId     String   @unique
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  productId     String   @unique @db.ObjectId
   rawStock      Float    @default(0) // in kg
   preparedStock Float    @default(0) // in kg
   reservedStock Float    @default(0) // in kg
@@ -274,8 +274,8 @@ model Inventory {
 }
 
 model WastageRecord {
-  id          String    @id @default(cuid())
-  inventoryId String
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  inventoryId String    @db.ObjectId
   quantity    Float     // in kg
   reason      String
   notes       String?
@@ -285,7 +285,7 @@ model WastageRecord {
 }
 
 model Coupon {
-  id            String       @id @default(cuid())
+  id            String       @id @default(auto()) @map("_id") @db.ObjectId
   code          String       @unique
   description   String?
   discountType  DiscountType
@@ -301,10 +301,10 @@ model Coupon {
 }
 
 model Review {
-  id        String   @id @default(cuid())
-  userId    String
-  productId String
-  orderId   String?
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  productId String   @db.ObjectId
+  orderId   String?  @db.ObjectId
   rating    Int      // 1-5
   comment   String?
   isVerified Boolean @default(false)
@@ -317,9 +317,9 @@ model Review {
 }
 
 model Delivery {
-  id                String         @id @default(cuid())
-  orderId           String         @unique
-  deliveryPartnerId String?
+  id                String         @id @default(auto()) @map("_id") @db.ObjectId
+  orderId           String         @unique @db.ObjectId
+  deliveryPartnerId String?        // If it related to user, it would be @db.ObjectId. Left as String as it was.
   status            DeliveryStatus @default(PENDING)
   assignedAt        DateTime?
   pickedUpAt        DateTime?
@@ -331,7 +331,7 @@ model Delivery {
 }
 
 model DeliveryZone {
-  id              String   @id @default(cuid())
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
   name            String
   minDistance     Float    // km
   maxDistance     Float    // km
@@ -343,9 +343,9 @@ model DeliveryZone {
 }
 
 model SupportTicket {
-  id        String        @id @default(cuid())
-  userId    String
-  orderId   String?
+  id        String        @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String        @db.ObjectId
+  orderId   String?       @db.ObjectId
   issue     String
   description String?
   status    SupportStatus @default(OPEN)
@@ -357,8 +357,8 @@ model SupportTicket {
 }
 
 model Refund {
-  id        String   @id @default(cuid())
-  orderId   String
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  orderId   String   @db.ObjectId
   amount    Float
   reason    String
   status    String   @default("PENDING") // PENDING, APPROVED, REJECTED, PROCESSED
@@ -370,9 +370,9 @@ model Refund {
 }
 
 model Wishlist {
-  id        String   @id @default(cuid())
-  userId    String
-  productId String
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  productId String   @db.ObjectId
   createdAt DateTime @default(now())
 
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -382,8 +382,8 @@ model Wishlist {
 }
 
 model Notification {
-  id        String   @id @default(cuid())
-  userId    String
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
   title     String
   message   String
   isRead    Boolean  @default(false)
@@ -394,8 +394,8 @@ model Notification {
 }
 
 model Subscription {
-  id          String   @id @default(cuid())
-  userId      String
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String   @db.ObjectId
   planName    String
   description String?
   price       Float
@@ -412,9 +412,9 @@ model Subscription {
 // ─── WhatsApp Commerce ────────────────────────────────────────────────────────
 
 model WhatsAppSession {
-  id          String   @id @default(cuid())
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
   phoneNumber String   @unique
-  userId      String?
+  userId      String?  @db.ObjectId
   state       String   @default("MENU")
   sessionData Json?
   createdAt   DateTime @default(now())
@@ -424,7 +424,7 @@ model WhatsAppSession {
 }
 
 model WhatsAppCart {
-  id          String   @id @default(cuid())
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
   phoneNumber String   @unique
   items       Json     @default("[]")
   couponCode  String?
@@ -433,7 +433,7 @@ model WhatsAppCart {
 }
 
 model WhatsAppAuditLog {
-  id         String   @id @default(cuid())
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
   adminPhone String
   action     String
   metadata   Json
@@ -441,7 +441,7 @@ model WhatsAppAuditLog {
 }
 
 model WhatsAppMessage {
-  id            String    @id @default(cuid())
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
   messageId     String    @unique
   phoneNumber   String?
   messageType   String?
@@ -452,5 +452,3 @@ model WhatsAppMessage {
   @@index([phoneNumber])
   @@index([createdAt])
 }
-
-
