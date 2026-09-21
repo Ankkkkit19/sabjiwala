@@ -7,27 +7,42 @@ const JWT_SECRET = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || 'sabj
 export async function middleware(request: NextRequest) {
     const path = request.nextUrl.pathname;
 
-    // We only protect /admin routes using Edge middleware.
-    // Further Server-Side Component logic will re-verify.
-    if (path.startsWith('/admin')) {
-        const token = request.cookies.get('session')?.value;
-        if (!token) {
-            return NextResponse.redirect(new URL('/login', request.url));
-        }
+    // Allow static files, Next.js internal paths, and API auth routes
+    if (
+        path.startsWith('/_next') ||
+        path.startsWith('/images/') ||
+        path.startsWith('/favicon.ico') ||
+        path.startsWith('/api/auth/') ||
+        path.startsWith('/api/whatsapp/') ||
+        path === '/login'
+    ) {
+        return NextResponse.next();
+    }
 
-        try {
-            const { payload } = await jwtVerify(token, JWT_SECRET, { algorithms: ['HS256'] });
+    const token = request.cookies.get('session')?.value;
+
+    if (!token) {
+        return NextResponse.redirect(new URL('/login', request.url));
+    }
+
+    try {
+        const { payload } = await jwtVerify(token, JWT_SECRET, { algorithms: ['HS256'] });
+
+        // If it's an admin path, ensure the role is ADMIN
+        if (path.startsWith('/admin') || path.startsWith('/api/admin')) {
             if (payload.role !== 'ADMIN') {
-                return NextResponse.redirect(new URL('/login', request.url));
+                return NextResponse.redirect(new URL('/', request.url));
             }
-        } catch (error) {
-            return NextResponse.redirect(new URL('/login', request.url));
         }
+    } catch (error) {
+        // Token is invalid/expired
+        return NextResponse.redirect(new URL('/login', request.url));
     }
 
     return NextResponse.next();
 }
 
 export const config = {
-    matcher: ['/admin/:path*', '/api/admin/:path*'],
+    // Matcher now matches all paths except /api (but we want to match /api/admin), so just match all paths.
+    matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 };
